@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-RSpec.describe Redis::Client::Namespace do
+RSpec.describe RedisClient::Namespace do
   it "has a version number" do
-    expect(Redis::Client::Namespace::VERSION).not_to be nil
+    expect(RedisClient::Namespace::VERSION).not_to be nil
   end
 
   it "does something useful" do

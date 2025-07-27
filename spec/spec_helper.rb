@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "redis/client/namespace"
+require "redis-client-namespace"
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
