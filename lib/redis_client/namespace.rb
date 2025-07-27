@@ -2,11 +2,16 @@
 
 require "redis-client"
 require_relative "namespace/version"
+require_relative "namespace/command_builder"
 
-module RedisClient
-  module Namespace
+class RedisClient
+  class Namespace
+    include RedisClient::Namespace::CommandBuilder
+
     class Error < StandardError; end
-    
-    # ここにNamespaceCommandBuilderクラスの実装を配置してください
+
+    def initialize(namespace = "")
+      @namespace = namespace
+    end
   end
 end

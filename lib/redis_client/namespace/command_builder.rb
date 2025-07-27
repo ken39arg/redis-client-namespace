@@ -1,0 +1,409 @@
+# frozen_string_literal: true
+
+class RedisClient
+  class Namespace
+    module CommandBuilder
+      # Namespace transformation strategies
+      STRATEGIES = {
+        first: ->(cmd, &block) { cmd[1] = block.call(cmd[1]) if cmd[1] },
+        all: ->(cmd, &block) { cmd.drop(1).each_with_index { |key, i| cmd[i + 1] = block.call(key) } },
+        exclude_first: ->(cmd, &block) { cmd.drop(2).each_with_index { |key, i| cmd[i + 2] = block.call(key) } },
+        exclude_last: ->(cmd, &block) {
+          return if cmd.size < 3
+          (1...cmd.size - 1).each { |i| cmd[i] = block.call(cmd[i]) }
+        },
+        alternate: ->(cmd, &block) {
+          cmd.drop(1).each_with_index { |item, i|
+            cmd[i + 1] = block.call(item) if i.even?
+          }
+        },
+        first_two: ->(cmd, &block) {
+          cmd[1] = block.call(cmd[1]) if cmd[1]
+          cmd[2] = block.call(cmd[2]) if cmd[2]
+        },
+        eval_style: ->(cmd, &block) {
+          return if cmd.size < 3
+          numkeys = cmd[2].to_i
+          actual_keys = [numkeys, cmd.size - 3].min
+          actual_keys.times { |i| cmd[3 + i] = block.call(cmd[3 + i]) if cmd[3 + i] }
+        },
+        scan_style: ->(cmd, &block) {
+          cmd[1] = block.call(cmd[1]) if cmd[1]
+          # Handle MATCH option
+          if (match_idx = cmd.index { |arg| arg.to_s.casecmp("MATCH").zero? })
+            cmd[match_idx + 1] = block.call(cmd[match_idx + 1]) if cmd[match_idx + 1]
+          end
+        },
+        second: ->(cmd, &block) { cmd[2] = block.call(cmd[2]) if cmd[2] },
+        sort: ->(cmd, &block) {
+          cmd[1] = block.call(cmd[1]) if cmd[1]
+          # Handle BY, GET, STORE options
+          cmd.each_with_index do |arg, i|
+            next if i == 0
+            case arg.to_s.upcase
+            when "BY", "STORE"
+              cmd[i + 1] = block.call(cmd[i + 1]) if cmd[i + 1]
+            when "GET"
+              # GET can be "#" or a pattern
+              cmd[i + 1] = block.call(cmd[i + 1]) if cmd[i + 1] && cmd[i + 1] != "#"
+            end
+          end
+        },
+        georadius: ->(cmd, &block) {
+          cmd[1] = block.call(cmd[1]) if cmd[1]
+          # Handle STORE, STOREDIST options
+          cmd.each_with_index do |arg, i|
+            if arg.to_s.casecmp("STORE").zero? || arg.to_s.casecmp("STOREDIST").zero?
+              cmd[i + 1] = block.call(cmd[i + 1]) if cmd[i + 1]
+            end
+          end
+        },
+        xread_style: ->(cmd, &block) {
+          # Find STREAMS keyword
+          streams_idx = cmd.index { |arg| arg.to_s.casecmp("STREAMS").zero? }
+          return unless streams_idx
+
+          # Transform keys after STREAMS
+          num_keys = (cmd.size - streams_idx - 1) / 2
+          num_keys.times do |i|
+            key_idx = streams_idx + 1 + i
+            cmd[key_idx] = block.call(cmd[key_idx]) if cmd[key_idx]
+          end
+        },
+        migrate_style: ->(cmd, &block) {
+          # MIGRATE host port key destination-db timeout [options]
+          # MIGRATE host port "" destination-db timeout [COPY | REPLACE] KEYS key [key ...]
+          if cmd[3] && cmd[3] != ""
+            # Single key format
+            cmd[3] = block.call(cmd[3])
+          elsif (keys_idx = cmd.index { |arg| arg.to_s.casecmp("KEYS").zero? })
+            # Multiple keys format - transform keys after KEYS keyword
+            (keys_idx + 1...cmd.size).each do |i|
+              cmd[i] = block.call(cmd[i]) if cmd[i]
+            end
+          end
+        },
+        zinterstore_style: ->(cmd, &block) {
+          # ZINTERSTORE destination numkeys key [key ...]
+          return if cmd.size < 3
+          cmd[1] = block.call(cmd[1]) if cmd[1] # destination
+
+          numkeys = cmd[2].to_i
+          actual_keys = [numkeys, cmd.size - 3].min
+          actual_keys.times do |i|
+            key_idx = 3 + i
+            cmd[key_idx] = block.call(cmd[key_idx]) if cmd[key_idx]
+          end
+        },
+        blmpop_style: ->(cmd, &block) {
+          # BLMPOP timeout numkeys key [key ...] <LEFT | RIGHT> [COUNT count]
+          return if cmd.size < 4
+
+          numkeys = cmd[2].to_i
+          actual_keys = [numkeys, cmd.size - 3].min
+          actual_keys.times do |i|
+            key_idx = 3 + i
+            cmd[key_idx] = block.call(cmd[key_idx]) if cmd[key_idx]
+          end
+        },
+        lmpop_style: ->(cmd, &block) {
+          # LMPOP numkeys key [key ...] <LEFT | RIGHT> [COUNT count]
+          return if cmd.size < 3
+
+          numkeys = cmd[1].to_i
+          actual_keys = [numkeys, cmd.size - 2].min
+          actual_keys.times do |i|
+            key_idx = 2 + i
+            cmd[key_idx] = block.call(cmd[key_idx]) if cmd[key_idx]
+          end
+        },
+        scan_cursor_style: ->(cmd, &block) {
+          # SCAN cursor [MATCH pattern] [COUNT count] [TYPE type]
+          # Only transform MATCH pattern if present
+          if (match_idx = cmd.index { |arg| arg.to_s.casecmp("MATCH").zero? })
+            cmd[match_idx + 1] = block.call(cmd[match_idx + 1]) if cmd[match_idx + 1]
+          end
+        },
+        pubsub_style: ->(cmd, &block) {
+          # PUBSUB CHANNELS [pattern]
+          # PUBSUB NUMSUB [channel [channel ...]]
+          # PUBSUB SHARDCHANNELS [pattern]
+          # PUBSUB SHARDNUMSUB [shardchannel [shardchannel ...]]
+          return if cmd.size < 2
+
+          subcommand = cmd[1].to_s.upcase
+          case subcommand
+          when "CHANNELS", "SHARDCHANNELS"
+            # Transform pattern if present
+            cmd[2] = block.call(cmd[2]) if cmd[2]
+          when "NUMSUB", "SHARDNUMSUB"
+            # Transform all channels starting from index 2
+            (2...cmd.size).each do |i|
+              cmd[i] = block.call(cmd[i]) if cmd[i]
+            end
+            # NUMPAT has no channels to transform
+          end
+        },
+        none: ->(cmd, &block) {}, # No transformation
+      }.freeze
+
+      # Command to strategy mapping (inspired by redis-namespace)
+      COMMANDS = {
+        # Keys
+        "DEL" => :all,
+        "EXISTS" => :all,
+        "EXPIRE" => :first,
+        "EXPIREAT" => :first,
+        "KEYS" => :first,
+        "MOVE" => :first,
+        "PERSIST" => :first,
+        "PEXPIRE" => :first,
+        "PEXPIREAT" => :first,
+        "PTTL" => :first,
+        "RANDOMKEY" => :none,
+        "RENAME" => :all,
+        "RENAMENX" => :all,
+        "RESTORE" => :first,
+        "TTL" => :first,
+        "TYPE" => :first,
+        "UNLINK" => :all,
+        "SCAN" => :scan_cursor_style,
+        "DUMP" => :first,
+
+        # Strings
+        "APPEND" => :first,
+        "BITCOUNT" => :first,
+        "BITOP" => :exclude_first,
+        "BITPOS" => :first,
+        "DECR" => :first,
+        "DECRBY" => :first,
+        "GET" => :first,
+        "GETBIT" => :first,
+        "GETRANGE" => :first,
+        "GETSET" => :first,
+        "INCR" => :first,
+        "INCRBY" => :first,
+        "INCRBYFLOAT" => :first,
+        "MGET" => :all,
+        "MSET" => :alternate,
+        "MSETNX" => :alternate,
+        "PSETEX" => :first,
+        "SET" => :first,
+        "SETBIT" => :first,
+        "SETEX" => :first,
+        "SETNX" => :first,
+        "SETRANGE" => :first,
+        "STRLEN" => :first,
+        "GETDEL" => :first,
+        "GETEX" => :first,
+
+        # Lists
+        "BLPOP" => :exclude_last,
+        "BRPOP" => :exclude_last,
+        "BRPOPLPUSH" => :first_two,
+        "LINDEX" => :first,
+        "LINSERT" => :first,
+        "LLEN" => :first,
+        "LPOP" => :first,
+        "LPUSH" => :first,
+        "LPUSHX" => :first,
+        "LRANGE" => :first,
+        "LREM" => :first,
+        "LSET" => :first,
+        "LTRIM" => :first,
+        "RPOP" => :first,
+        "RPOPLPUSH" => :first_two,
+        "RPUSH" => :first,
+        "RPUSHX" => :first,
+        "LMOVE" => :first_two,
+        "BLMOVE" => :first_two,
+        "LMPOP" => :lmpop_style,
+        "BLMPOP" => :blmpop_style,
+
+        # Sets
+        "SADD" => :first,
+        "SCARD" => :first,
+        "SDIFF" => :all,
+        "SDIFFSTORE" => :all,
+        "SINTER" => :all,
+        "SINTERSTORE" => :all,
+        "SISMEMBER" => :first,
+        "SMEMBERS" => :first,
+        "SMISMEMBER" => :first,
+        "SMOVE" => :first_two,
+        "SPOP" => :first,
+        "SRANDMEMBER" => :first,
+        "SREM" => :first,
+        "SUNION" => :all,
+        "SUNIONSTORE" => :all,
+        "SSCAN" => :scan_style,
+
+        # Sorted Sets
+        "BZPOPMIN" => :exclude_last,
+        "BZPOPMAX" => :exclude_last,
+        "ZADD" => :first,
+        "ZCARD" => :first,
+        "ZCOUNT" => :first,
+        "ZINCRBY" => :first,
+        "ZINTERSTORE" => :zinterstore_style,
+        "ZLEXCOUNT" => :first,
+        "ZPOPMAX" => :first,
+        "ZPOPMIN" => :first,
+        "ZRANGE" => :first,
+        "ZRANGEBYLEX" => :first,
+        "ZREVRANGEBYLEX" => :first,
+        "ZRANGEBYSCORE" => :first,
+        "ZRANK" => :first,
+        "ZREM" => :first,
+        "ZREMRANGEBYLEX" => :first,
+        "ZREMRANGEBYRANK" => :first,
+        "ZREMRANGEBYSCORE" => :first,
+        "ZREVRANGE" => :first,
+        "ZREVRANGEBYSCORE" => :first,
+        "ZREVRANK" => :first,
+        "ZSCORE" => :first,
+        "ZUNIONSTORE" => :zinterstore_style,
+        "ZMSCORE" => :first,
+        "ZSCAN" => :scan_style,
+        "ZDIFF" => :lmpop_style,
+        "ZDIFFSTORE" => :zinterstore_style,
+        "ZINTER" => :lmpop_style,
+        "ZUNION" => :lmpop_style,
+        "ZRANDMEMBER" => :first,
+
+        # Hashes
+        "HDEL" => :first,
+        "HEXISTS" => :first,
+        "HGET" => :first,
+        "HGETALL" => :first,
+        "HINCRBY" => :first,
+        "HINCRBYFLOAT" => :first,
+        "HKEYS" => :first,
+        "HLEN" => :first,
+        "HMGET" => :first,
+        "HMSET" => :first,
+        "HSET" => :first,
+        "HSETNX" => :first,
+        "HSTRLEN" => :first,
+        "HVALS" => :first,
+        "HSCAN" => :scan_style,
+        "HRANDFIELD" => :first,
+
+        # HyperLogLog
+        "PFADD" => :first,
+        "PFCOUNT" => :all,
+        "PFMERGE" => :all,
+
+        # Geo
+        "GEOADD" => :first,
+        "GEODIST" => :first,
+        "GEOHASH" => :first,
+        "GEOPOS" => :first,
+        "GEORADIUS" => :georadius,
+        "GEORADIUSBYMEMBER" => :georadius,
+        "GEOSEARCH" => :first,
+        "GEOSEARCHSTORE" => :all,
+
+        # Streams
+        "XADD" => :first,
+        "XRANGE" => :first,
+        "XREVRANGE" => :first,
+        "XLEN" => :first,
+        "XREAD" => :xread_style,
+        "XREADGROUP" => :xread_style,
+        "XGROUP" => :second,
+        "XACK" => :first,
+        "XCLAIM" => :first,
+        "XDEL" => :first,
+        "XTRIM" => :first,
+        "XPENDING" => :first,
+        "XINFO" => :second,
+
+        # Pub/Sub
+        "PSUBSCRIBE" => :all,
+        "PUBLISH" => :first,
+        "PUNSUBSCRIBE" => :all,
+        "SUBSCRIBE" => :all,
+        "UNSUBSCRIBE" => :all,
+        "PUBSUB" => :pubsub_style,
+
+        # Transactions
+        "DISCARD" => :none,
+        "EXEC" => :none,
+        "MULTI" => :none,
+        "UNWATCH" => :none,
+        "WATCH" => :all,
+
+        # Scripting
+        "EVAL" => :eval_style,
+        "EVALSHA" => :eval_style,
+        "SCRIPT" => :none,
+
+        # Connection
+        "AUTH" => :none,
+        "ECHO" => :none,
+        "PING" => :none,
+        "QUIT" => :none,
+        "SELECT" => :none,
+        "SWAPDB" => :none,
+        "RESET" => :none,
+
+        # Server
+        "BGREWRITEAOF" => :none,
+        "BGSAVE" => :none,
+        "CLIENT" => :none,
+        "COMMAND" => :none,
+        "CONFIG" => :none,
+        "DBSIZE" => :none,
+        "DEBUG" => :none,
+        "FLUSHALL" => :none,
+        "FLUSHDB" => :none,
+        "INFO" => :none,
+        "LASTSAVE" => :none,
+        "MEMORY" => :none,
+        "MONITOR" => :none,
+        "SAVE" => :none,
+        "SHUTDOWN" => :none,
+        "SLAVEOF" => :none,
+        "SLOWLOG" => :none,
+        "SYNC" => :none,
+        "TIME" => :none,
+        "LATENCY" => :none,
+        "LOLWUT" => :none,
+        "ACL" => :none,
+        "MODULE" => :none,
+        "WAIT" => :none,
+        "CLUSTER" => :none,
+        "HELLO" => :none,
+
+        # Other
+        "SORT" => :sort,
+        "COPY" => :first_two,
+        "MIGRATE" => :migrate_style,
+      }.freeze
+
+      def generate(args, kwargs = nil)
+        command = RedisClient::CommandBuilder.generate(args, kwargs)
+        return command if @namespace.nil? || @namespace.empty? || command.size < 2
+
+        cmd_name = command[0].to_s.upcase
+        strategy = COMMANDS[cmd_name]
+
+        # Raise error for unknown commands to maintain compatibility with redis-namespace
+        unless strategy
+          raise("RedisClient::NamespaceCommandBuilder does not know how to handle '#{cmd_name}'.")
+        end
+
+        STRATEGIES[strategy].call(command) { |key| rename_key(key) }
+
+        command
+      end
+
+      def rename_key(key)
+        return key if @namespace.nil? || @namespace.empty?
+
+        "#{@namespace}:#{key}"
+      end
+    end
+  end
+end

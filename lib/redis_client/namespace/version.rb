@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-module RedisClient
-  module Namespace
+class RedisClient
+  class Namespace
     VERSION = "0.1.0"
   end
 end
