@@ -28,7 +28,7 @@ jobs:
             version: 7.2
           - name: Redis 8.0
             image: redis
-            version: 8.
+            version: 8.0
           - name: Valkey 8
             image: valkey/valkey
             version: 8
