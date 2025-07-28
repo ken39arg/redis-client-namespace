@@ -171,8 +171,6 @@ The gem adds minimal overhead to Redis operations. Command transformation is per
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
-
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`.
 
 ### Local Testing with Redis
@@ -192,17 +190,17 @@ docker compose down
 
 ## Testing
 
-The gem includes comprehensive tests covering all Redis commands. Our test suite uses the official [Redis commands.json](https://github.com/redis/docs/blob/main/data/commands.json) specification to ensure complete coverage of all Redis commands and their key transformation strategies:
+The gem includes comprehensive tests covering Redis commands. Our test suite uses the official [Redis commands.json](https://github.com/redis/docs/blob/main/data/commands.json) specification to ensure broad coverage of Redis commands and their key transformation strategies:
 
 - **Automated command coverage**: Tests are generated from Redis's official command specification
 - **Manual edge case testing**: Complex commands like `SORT`, `EVAL`, and `MIGRATE` have dedicated test suites
-- **Full Redis compatibility**: Ensures all current and future Redis commands work correctly
+- **Wide Redis compatibility**: Supports the vast majority of Redis commands with proper key handling
 
 ```bash
 bundle exec rspec
 ```
 
-This approach guarantees that RedisClient::Namespace stays up-to-date with Redis command changes and maintains 100% command compatibility.
+This approach helps RedisClient::Namespace stay compatible with Redis command changes and maintain compatibility with most Redis operations.
 
 ## Contributing
 
