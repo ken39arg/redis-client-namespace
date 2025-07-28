@@ -17,6 +17,8 @@ RSpec.describe RedisClient::Namespace do
       XREAD XREADGROUP
       GEORADIUS GEORADIUSBYMEMBER
       MIGRATE
+      HSCAN SSCAN ZSCAN
+      SORT SORT_RO
     ].freeze
 
     def make_test_case(cmd_name, arguments, multi_size: 1, non_optional: false)
@@ -38,18 +40,14 @@ RSpec.describe RedisClient::Namespace do
           input += keys
           output += keys.map { |k| "#{namespace}:#{k}" }
         when "pattern"
-          if cmd_name == "SCAN"
-            patterns = if arg["multiple"]
-                         multi_size.times.with_index.map { |i| "#{arg["name"]}#{i + 1}*" }
-                       else
-                         ["#{arg["name"]}1*"]
-                       end
-            output = input.dup
-            input += patterns
-            output += patterns.map { |k| "#{namespace}:#{k}" }
-          else
-            input << "#{arg["name"]}*"
-          end
+          patterns = if arg["multiple"]
+                       multi_size.times.with_index.map { |i| "#{arg["name"]}#{i + 1}*" }
+                     else
+                       ["#{arg["name"]}1*"]
+                     end
+          output = input.dup
+          input += patterns
+          output += patterns.map { |k| "#{namespace}:#{k}" }
         when "string"
           input << arg["name"]
         when "integer"
@@ -87,7 +85,7 @@ RSpec.describe RedisClient::Namespace do
 
       arguments = cmd_info["arguments"] || []
 
-      has_key = arguments.any? { |arg| arg["type"] == "key" }
+      has_key = arguments.any? { |arg| ["key", "pattern"].include?(arg["type"]) }
       has_multiple_key = arguments.any? { |arg| arg["type"] == "key" && arg["multiple"] }
       has_optional_key = arguments.any? { |arg| arg["type"] == "key" && arg["optional"] }
       has_optional_arg = arguments.any? { |arg| arg["type"] != "key" && arg["optional"] }

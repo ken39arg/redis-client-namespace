@@ -84,37 +84,9 @@ RSpec.describe RedisClient::Namespace do
         expect(result).to eq(["SCAN", "0", "MATCH", "test:prefix*", "COUNT", "10"])
       end
 
-      it "HSCAN command" do
-        result = builder.generate(["HSCAN", "hash", "0", "MATCH", "field*"])
-        expect(result).to eq(["HSCAN", "test:hash", "0", "MATCH", "field*"])
-      end
-
-      it "HSCAN command without MATCH option" do
-        result = builder.generate(["HSCAN", "hash", "0"])
-        expect(result).to eq(["HSCAN", "test:hash", "0"])
-      end
-
       it "SCAN command without MATCH option" do
         result = builder.generate(["SCAN", "0", "COUNT", "10"])
         expect(result).to eq(["SCAN", "0", "COUNT", "10"])
-      end
-    end
-
-    context "SORT command processing" do
-      # SORT command
-      it "SORT command" do
-        result = builder.generate(["SORT", "list"])
-        expect(result).to eq(["SORT", "test:list"])
-      end
-
-      it "processes SORT command with BY, GET, STORE options" do
-        result = builder.generate(["SORT", "list", "BY", "weight_*", "GET", "object_*", "STORE", "result"])
-        expect(result).to eq(["SORT", "test:list", "BY", "test:weight_*", "GET", "test:object_*", "STORE", "test:result"])
-      end
-
-      it "processes SORT command with GET #" do
-        result = builder.generate(["SORT", "list", "GET", "#"])
-        expect(result).to eq(["SORT", "test:list", "GET", "#"])
       end
     end
 

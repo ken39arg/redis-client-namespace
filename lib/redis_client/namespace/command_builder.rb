@@ -29,7 +29,7 @@ class RedisClient
           actual_keys = [numkeys, cmd.size - 3].min
           actual_keys.times { |i| cmd[3 + i] = block.call(cmd[3 + i]) if cmd[3 + i] }
         },
-        scan_style: lambda { |cmd, &block|
+        original_scan_style: lambda { |cmd, &block|
           cmd[1] = block.call(cmd[1]) if cmd[1]
           # Handle MATCH option
           if (match_idx = cmd.index { |arg| arg.to_s.casecmp("MATCH").zero? }) && cmd[match_idx + 1]
@@ -123,8 +123,10 @@ class RedisClient
         },
         scan_cursor_style: lambda { |cmd, &block|
           # SCAN cursor [MATCH pattern] [COUNT count] [TYPE type]
-          # Only transform MATCH pattern if present
-          if (match_idx = cmd.index { |arg| arg.to_s.casecmp("MATCH").zero? }) && cmd[match_idx + 1]
+          # Only transform MATCH pattern if present and command is SCAN
+          if cmd[0].to_s.casecmp("SCAN").zero? && (match_idx = cmd.index do |arg|
+            arg.to_s.casecmp("MATCH").zero?
+          end) && cmd[match_idx + 1]
             cmd[match_idx + 1] = block.call(cmd[match_idx + 1])
           end
         },
@@ -147,6 +149,15 @@ class RedisClient
             end
             # NUMPAT has no channels to transform
           end
+        },
+        scan_style: lambda { |cmd, &block|
+          # HSCAN/SSCAN/ZSCAN key cursor [MATCH pattern] [COUNT count]
+          # First argument is the key, don't transform MATCH pattern for HSCAN/SSCAN/ZSCAN
+          cmd[1] = block.call(cmd[1]) if cmd[1]
+        },
+        memory_style: lambda { |cmd, &block|
+          # MEMORY USAGE key [SAMPLES samples]
+          cmd[2] = block.call(cmd[2]) if cmd.size >= 3 && cmd[1].to_s.casecmp("USAGE").zero? && cmd[2]
         },
         none: ->(cmd, &block) {} # No transformation
       }.freeze
@@ -179,6 +190,8 @@ class RedisClient
         "BITCOUNT" => :first,
         "BITOP" => :exclude_first,
         "BITPOS" => :first,
+        "BITFIELD" => :first,
+        "BITFIELD_RO" => :first,
         "DECR" => :first,
         "DECRBY" => :first,
         "GET" => :first,
@@ -200,6 +213,9 @@ class RedisClient
         "STRLEN" => :first,
         "GETDEL" => :first,
         "GETEX" => :first,
+        "LCS" => :first_two,
+        "TOUCH" => :all,
+        "SUBSTR" => :first,
 
         # Lists
         "BLPOP" => :exclude_last,
@@ -223,6 +239,7 @@ class RedisClient
         "BLMOVE" => :first_two,
         "LMPOP" => :lmpop_style,
         "BLMPOP" => :blmpop_style,
+        "LPOS" => :first,
 
         # Sets
         "SADD" => :first,
@@ -241,6 +258,7 @@ class RedisClient
         "SUNION" => :all,
         "SUNIONSTORE" => :all,
         "SSCAN" => :scan_style,
+        "SINTERCARD" => :lmpop_style,
 
         # Sorted Sets
         "BZPOPMIN" => :exclude_last,
@@ -274,6 +292,10 @@ class RedisClient
         "ZINTER" => :lmpop_style,
         "ZUNION" => :lmpop_style,
         "ZRANDMEMBER" => :first,
+        "BZMPOP" => :blmpop_style,
+        "ZMPOP" => :lmpop_style,
+        "ZINTERCARD" => :lmpop_style,
+        "ZRANGESTORE" => :first_two,
 
         # Hashes
         "HDEL" => :first,
@@ -292,11 +314,23 @@ class RedisClient
         "HVALS" => :first,
         "HSCAN" => :scan_style,
         "HRANDFIELD" => :first,
+        "HEXPIRE" => :first,
+        "HEXPIREAT" => :first,
+        "HEXPIRETIME" => :first,
+        "HPERSIST" => :first,
+        "HPEXPIRE" => :first,
+        "HPEXPIREAT" => :first,
+        "HPEXPIRETIME" => :first,
+        "HTTL" => :first,
+        "HPTTL" => :first,
+        "HGETF" => :first,
+        "HSETF" => :first,
 
         # HyperLogLog
         "PFADD" => :first,
         "PFCOUNT" => :all,
         "PFMERGE" => :all,
+        "PFDEBUG" => :second,
 
         # Geo
         "GEOADD" => :first,
@@ -306,7 +340,9 @@ class RedisClient
         "GEORADIUS" => :georadius,
         "GEORADIUSBYMEMBER" => :georadius,
         "GEOSEARCH" => :first,
-        "GEOSEARCHSTORE" => :all,
+        "GEOSEARCHSTORE" => :first_two,
+        "GEORADIUS_RO" => :georadius,
+        "GEORADIUSBYMEMBER_RO" => :georadius,
 
         # Streams
         "XADD" => :first,
@@ -322,6 +358,8 @@ class RedisClient
         "XTRIM" => :first,
         "XPENDING" => :first,
         "XINFO" => :second,
+        "XAUTOCLAIM" => :first,
+        "XSETID" => :first,
 
         # Pub/Sub
         "PSUBSCRIBE" => :all,
@@ -330,6 +368,9 @@ class RedisClient
         "SUBSCRIBE" => :all,
         "UNSUBSCRIBE" => :all,
         "PUBSUB" => :pubsub_style,
+        "SPUBLISH" => :none,
+        "SSUBSCRIBE" => :none,
+        "SUNSUBSCRIBE" => :none,
 
         # Transactions
         "DISCARD" => :none,
@@ -342,6 +383,11 @@ class RedisClient
         "EVAL" => :eval_style,
         "EVALSHA" => :eval_style,
         "SCRIPT" => :none,
+        "EVAL_RO" => :eval_style,
+        "EVALSHA_RO" => :eval_style,
+        "FCALL" => :eval_style,
+        "FCALL_RO" => :eval_style,
+        "FUNCTION" => :none,
 
         # Connection
         "AUTH" => :none,
@@ -364,7 +410,7 @@ class RedisClient
         "FLUSHDB" => :none,
         "INFO" => :none,
         "LASTSAVE" => :none,
-        "MEMORY" => :none,
+        "MEMORY" => :memory_style,
         "MONITOR" => :none,
         "SAVE" => :none,
         "SHUTDOWN" => :none,
@@ -379,11 +425,20 @@ class RedisClient
         "WAIT" => :none,
         "CLUSTER" => :none,
         "HELLO" => :none,
+        "FAILOVER" => :none,
+        "REPLICAOF" => :none,
+        "PSYNC" => :none,
+        "WAITAOF" => :none,
 
         # Other
         "SORT" => :sort,
         "COPY" => :first_two,
-        "MIGRATE" => :migrate_style
+        "MIGRATE" => :migrate_style,
+        "SORT_RO" => :sort,
+        "RESTORE-ASKING" => :first,
+        "OBJECT" => :second,
+        "EXPIRETIME" => :first,
+        "PEXPIRETIME" => :first
       }.freeze
 
       def generate(args, kwargs = nil)

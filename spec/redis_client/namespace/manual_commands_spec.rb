@@ -11,6 +11,8 @@ RSpec.describe RedisClient::Namespace do
     #   XREAD XREADGROUP
     #   GEORADIUS GEORADIUSBYMEMBER
     #   MIGRATE
+    #   HSCAN SSCAN ZSCAN
+    #   SORT SORT_RO
     # ]
 
     context "Pub/Sub commands" do
@@ -113,6 +115,45 @@ RSpec.describe RedisClient::Namespace do
       it "MIGRATE command with KEYS option" do
         result = builder.generate(["MIGRATE", "127.0.0.1", "6379", "", "0", "1000", "KEYS", "key1", "key2", "key3"])
         expect(result).to eq(["MIGRATE", "127.0.0.1", "6379", "", "0", "1000", "KEYS", "test:key1", "test:key2", "test:key3"])
+      end
+    end
+
+    context "SCAN family commands with special pattern handling" do
+      it "HSCAN command applies namespace to key but not to pattern" do
+        result = builder.generate(["HSCAN", "hash", "0", "MATCH", "field*"])
+        expect(result).to eq(["HSCAN", "test:hash", "0", "MATCH", "field*"])
+      end
+
+      it "HSCAN command without MATCH option" do
+        result = builder.generate(["HSCAN", "hash", "0"])
+        expect(result).to eq(["HSCAN", "test:hash", "0"])
+      end
+
+      it "SSCAN command applies namespace to key but not to pattern" do
+        result = builder.generate(["SSCAN", "set", "0", "MATCH", "member*", "COUNT", "10"])
+        expect(result).to eq(["SSCAN", "test:set", "0", "MATCH", "member*", "COUNT", "10"])
+      end
+
+      it "ZSCAN command applies namespace to key but not to pattern" do
+        result = builder.generate(["ZSCAN", "zset", "0", "MATCH", "member*"])
+        expect(result).to eq(["ZSCAN", "test:zset", "0", "MATCH", "member*"])
+      end
+    end
+
+    context "SORT commands with complex pattern handling" do
+      it "SORT command with BY, GET, STORE options" do
+        result = builder.generate(["SORT", "list", "BY", "weight_*", "GET", "object_*", "STORE", "result"])
+        expect(result).to eq(["SORT", "test:list", "BY", "test:weight_*", "GET", "test:object_*", "STORE", "test:result"])
+      end
+
+      it "SORT command with GET # (no transformation)" do
+        result = builder.generate(["SORT", "list", "GET", "#"])
+        expect(result).to eq(["SORT", "test:list", "GET", "#"])
+      end
+
+      it "SORT_RO command with patterns" do
+        result = builder.generate(["SORT_RO", "list", "BY", "weight_*", "GET", "object_*"])
+        expect(result).to eq(["SORT_RO", "test:list", "BY", "test:weight_*", "GET", "test:object_*"])
       end
     end
   end
