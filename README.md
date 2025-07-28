@@ -49,12 +49,12 @@ require 'redis-client-namespace'
 namespace = RedisClient::Namespace.new("myapp")
 
 # Use with redis-client
-client = RedisClient.new(command_builder: namespace)
+client = RedisClient.config(command_builder: namespace).new_client
 
 # All commands will be automatically namespaced
-client.set("user:123", "john")           # Actually sets "myapp:user:123"
-client.get("user:123")                   # Actually gets "myapp:user:123"
-client.del("user:123", "user:456")       # Actually deletes "myapp:user:123", "myapp:user:456"
+client.call("SET", "user:123", "john")   # Actually sets "myapp:user:123"
+client.call("GET", "user:123")           # Actually gets "myapp:user:123"
+client.call("DEL", "user:123", "user:456") # Actually deletes "myapp:user:123", "myapp:user:456"
 ```
 
 ### Custom Separator
@@ -62,9 +62,9 @@ client.del("user:123", "user:456")       # Actually deletes "myapp:user:123", "m
 ```ruby
 # Use a custom separator
 namespace = RedisClient::Namespace.new("myapp", separator: "-")
-client = RedisClient.new(command_builder: namespace)
+client = RedisClient.config(command_builder: namespace).new_client
 
-client.set("user:123", "john")           # Actually sets "myapp-user:123"
+client.call("SET", "user:123", "john")   # Actually sets "myapp-user:123"
 ```
 
 ### Nested Namespaces
@@ -74,8 +74,8 @@ client.set("user:123", "john")           # Actually sets "myapp-user:123"
 parent = RedisClient::Namespace.new("myapp")
 child = RedisClient::Namespace.new("jobs", parent_command_builder: parent)
 
-client = RedisClient.new(command_builder: child)
-client.set("queue", "important")         # Actually sets "jobs:myapp:queue"
+client = RedisClient.config(command_builder: child).new_client
+client.call("SET", "queue", "important") # Actually sets "jobs:myapp:queue"
 ```
 
 ### Sidekiq Integration
@@ -87,12 +87,19 @@ This gem is particularly useful for Sidekiq applications that need namespace iso
 require 'redis-client-namespace'
 
 namespace = RedisClient::Namespace.new("sidekiq_production")
+
 Sidekiq.configure_server do |config|
-  config.redis = { command_builder: namespace }
+  config.redis = {
+    url: 'redis://redis:6379/1',
+    command_builder: namespace,
+  }
 end
 
 Sidekiq.configure_client do |config|
-  config.redis = { command_builder: namespace }
+  config.redis = {
+    url: 'redis://redis:6379/1',
+    command_builder: namespace,
+  }
 end
 ```
 
@@ -121,10 +128,10 @@ For commands like `SCAN` and `KEYS`, the namespace is automatically applied to p
 
 ```ruby
 namespace = RedisClient::Namespace.new("myapp")
-client = RedisClient.new(command_builder: namespace)
+client = RedisClient.config(command_builder: namespace).new_client
 
 # This will scan for "myapp:user:*" pattern
-client.scan(0, match: "user:*")
+client.call("SCAN", 0, "MATCH", "user:*")
 ```
 
 ### Complex Commands
@@ -133,11 +140,11 @@ The gem handles complex commands with multiple keys intelligently:
 
 ```ruby
 # SORT command with BY and GET options
-client.sort("list", by: "weight_*", get: "object_*", store: "result")
+client.call("SORT", "list", "BY", "weight_*", "GET", "object_*", "STORE", "result")
 # Becomes: SORT myapp:list BY myapp:weight_* GET myapp:object_* STORE myapp:result
 
 # Lua scripts with proper key handling
-client.eval("return redis.call('get', KEYS[1])", 1, "mykey")
+client.call("EVAL", "return redis.call('get', KEYS[1])", 1, "mykey")
 # The key "mykey" becomes "myapp:mykey"
 ```
 
