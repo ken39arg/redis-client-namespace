@@ -168,6 +168,21 @@ After checking out the repo, run `bin/setup` to install dependencies. Then, run 
 
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`.
 
+### Local Testing with Redis
+
+For local development and testing, you can use Docker Compose to run Redis:
+
+```bash
+# Start Redis on port 16379
+docker compose up -d
+
+# Run tests against the local Redis instance
+REDIS_PORT=16379 bundle exec rake
+
+# Stop Redis when done
+docker compose down
+```
+
 ## Testing
 
 The gem includes comprehensive tests covering all Redis commands. Our test suite uses the official [Redis commands.json](https://github.com/redis/docs/blob/main/data/commands.json) specification to ensure complete coverage of all Redis commands and their key transformation strategies:
