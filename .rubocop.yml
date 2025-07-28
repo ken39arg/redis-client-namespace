@@ -1,8 +1,47 @@
 AllCops:
   TargetRubyVersion: 3.1
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - 'bin/*'
+    - 'vendor/**/*'
+    - 'tmp/**/*'
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+# Command builder module is inherently large due to Redis command mapping
+Metrics/ModuleLength:
+  Exclude:
+    - 'lib/redis_client/namespace/command_builder.rb'
+
+# Spec files and constant definitions can have long blocks
+Metrics/BlockLength:
+  Exclude:
+    - 'spec/**/*'
+    - 'lib/redis_client/namespace/command_builder.rb'
+
+# Documentation is good but not required for internal modules
+Style/Documentation:
+  Exclude:
+    - 'spec/**/*'
+    - 'lib/redis_client/namespace/command_builder.rb'
+
+# Prefer explicit array syntax in specs for readability
+Style/WordArray:
+  Exclude:
+    - 'spec/**/*'
+
+# Allow longer lines in specs
+Layout/LineLength:
+  Max: 120
+  Exclude:
+    - 'spec/**/*'
+
+# Entry point file name matches gem name
+Naming/FileName:
+  Exclude:
+    - 'lib/redis-client-namespace.rb'

@@ -8,38 +8,41 @@ class RedisClient
         first: ->(cmd, &block) { cmd[1] = block.call(cmd[1]) if cmd[1] },
         all: ->(cmd, &block) { cmd.drop(1).each_with_index { |key, i| cmd[i + 1] = block.call(key) } },
         exclude_first: ->(cmd, &block) { cmd.drop(2).each_with_index { |key, i| cmd[i + 2] = block.call(key) } },
-        exclude_last: ->(cmd, &block) {
+        exclude_last: lambda { |cmd, &block|
           return if cmd.size < 3
-          (1...cmd.size - 1).each { |i| cmd[i] = block.call(cmd[i]) }
+
+          (1...(cmd.size - 1)).each { |i| cmd[i] = block.call(cmd[i]) }
         },
-        alternate: ->(cmd, &block) {
-          cmd.drop(1).each_with_index { |item, i|
+        alternate: lambda { |cmd, &block|
+          cmd.drop(1).each_with_index do |item, i|
             cmd[i + 1] = block.call(item) if i.even?
-          }
+          end
         },
-        first_two: ->(cmd, &block) {
+        first_two: lambda { |cmd, &block|
           cmd[1] = block.call(cmd[1]) if cmd[1]
           cmd[2] = block.call(cmd[2]) if cmd[2]
         },
-        eval_style: ->(cmd, &block) {
+        eval_style: lambda { |cmd, &block|
           return if cmd.size < 3
+
           numkeys = cmd[2].to_i
           actual_keys = [numkeys, cmd.size - 3].min
           actual_keys.times { |i| cmd[3 + i] = block.call(cmd[3 + i]) if cmd[3 + i] }
         },
-        scan_style: ->(cmd, &block) {
+        scan_style: lambda { |cmd, &block|
           cmd[1] = block.call(cmd[1]) if cmd[1]
           # Handle MATCH option
-          if (match_idx = cmd.index { |arg| arg.to_s.casecmp("MATCH").zero? })
-            cmd[match_idx + 1] = block.call(cmd[match_idx + 1]) if cmd[match_idx + 1]
+          if (match_idx = cmd.index { |arg| arg.to_s.casecmp("MATCH").zero? }) && cmd[match_idx + 1]
+            cmd[match_idx + 1] = block.call(cmd[match_idx + 1])
           end
         },
         second: ->(cmd, &block) { cmd[2] = block.call(cmd[2]) if cmd[2] },
-        sort: ->(cmd, &block) {
+        sort: lambda { |cmd, &block|
           cmd[1] = block.call(cmd[1]) if cmd[1]
           # Handle BY, GET, STORE options
           cmd.each_with_index do |arg, i|
-            next if i == 0
+            next if i.zero?
+
             case arg.to_s.upcase
             when "BY", "STORE"
               cmd[i + 1] = block.call(cmd[i + 1]) if cmd[i + 1]
@@ -49,16 +52,16 @@ class RedisClient
             end
           end
         },
-        georadius: ->(cmd, &block) {
+        georadius: lambda { |cmd, &block|
           cmd[1] = block.call(cmd[1]) if cmd[1]
           # Handle STORE, STOREDIST options
           cmd.each_with_index do |arg, i|
-            if arg.to_s.casecmp("STORE").zero? || arg.to_s.casecmp("STOREDIST").zero?
-              cmd[i + 1] = block.call(cmd[i + 1]) if cmd[i + 1]
+            if (arg.to_s.casecmp("STORE").zero? || arg.to_s.casecmp("STOREDIST").zero?) && cmd[i + 1]
+              cmd[i + 1] = block.call(cmd[i + 1])
             end
           end
         },
-        xread_style: ->(cmd, &block) {
+        xread_style: lambda { |cmd, &block|
           # Find STREAMS keyword
           streams_idx = cmd.index { |arg| arg.to_s.casecmp("STREAMS").zero? }
           return unless streams_idx
@@ -70,7 +73,7 @@ class RedisClient
             cmd[key_idx] = block.call(cmd[key_idx]) if cmd[key_idx]
           end
         },
-        migrate_style: ->(cmd, &block) {
+        migrate_style: lambda { |cmd, &block|
           # MIGRATE host port key destination-db timeout [options]
           # MIGRATE host port "" destination-db timeout [COPY | REPLACE] KEYS key [key ...]
           if cmd[3] && cmd[3] != ""
@@ -78,14 +81,15 @@ class RedisClient
             cmd[3] = block.call(cmd[3])
           elsif (keys_idx = cmd.index { |arg| arg.to_s.casecmp("KEYS").zero? })
             # Multiple keys format - transform keys after KEYS keyword
-            (keys_idx + 1...cmd.size).each do |i|
+            ((keys_idx + 1)...cmd.size).each do |i|
               cmd[i] = block.call(cmd[i]) if cmd[i]
             end
           end
         },
-        zinterstore_style: ->(cmd, &block) {
+        zinterstore_style: lambda { |cmd, &block|
           # ZINTERSTORE destination numkeys key [key ...]
           return if cmd.size < 3
+
           cmd[1] = block.call(cmd[1]) if cmd[1] # destination
 
           numkeys = cmd[2].to_i
@@ -95,7 +99,7 @@ class RedisClient
             cmd[key_idx] = block.call(cmd[key_idx]) if cmd[key_idx]
           end
         },
-        blmpop_style: ->(cmd, &block) {
+        blmpop_style: lambda { |cmd, &block|
           # BLMPOP timeout numkeys key [key ...] <LEFT | RIGHT> [COUNT count]
           return if cmd.size < 4
 
@@ -106,7 +110,7 @@ class RedisClient
             cmd[key_idx] = block.call(cmd[key_idx]) if cmd[key_idx]
           end
         },
-        lmpop_style: ->(cmd, &block) {
+        lmpop_style: lambda { |cmd, &block|
           # LMPOP numkeys key [key ...] <LEFT | RIGHT> [COUNT count]
           return if cmd.size < 3
 
@@ -117,14 +121,14 @@ class RedisClient
             cmd[key_idx] = block.call(cmd[key_idx]) if cmd[key_idx]
           end
         },
-        scan_cursor_style: ->(cmd, &block) {
+        scan_cursor_style: lambda { |cmd, &block|
           # SCAN cursor [MATCH pattern] [COUNT count] [TYPE type]
           # Only transform MATCH pattern if present
-          if (match_idx = cmd.index { |arg| arg.to_s.casecmp("MATCH").zero? })
-            cmd[match_idx + 1] = block.call(cmd[match_idx + 1]) if cmd[match_idx + 1]
+          if (match_idx = cmd.index { |arg| arg.to_s.casecmp("MATCH").zero? }) && cmd[match_idx + 1]
+            cmd[match_idx + 1] = block.call(cmd[match_idx + 1])
           end
         },
-        pubsub_style: ->(cmd, &block) {
+        pubsub_style: lambda { |cmd, &block|
           # PUBSUB CHANNELS [pattern]
           # PUBSUB NUMSUB [channel [channel ...]]
           # PUBSUB SHARDCHANNELS [pattern]
@@ -144,7 +148,7 @@ class RedisClient
             # NUMPAT has no channels to transform
           end
         },
-        none: ->(cmd, &block) {}, # No transformation
+        none: ->(cmd, &block) {} # No transformation
       }.freeze
 
       # Command to strategy mapping (inspired by redis-namespace)
@@ -379,7 +383,7 @@ class RedisClient
         # Other
         "SORT" => :sort,
         "COPY" => :first_two,
-        "MIGRATE" => :migrate_style,
+        "MIGRATE" => :migrate_style
       }.freeze
 
       def generate(args, kwargs = nil)
@@ -390,9 +394,7 @@ class RedisClient
         strategy = COMMANDS[cmd_name]
 
         # Raise error for unknown commands to maintain compatibility with redis-namespace
-        unless strategy
-          raise("RedisClient::NamespaceCommandBuilder does not know how to handle '#{cmd_name}'.")
-        end
+        raise("RedisClient::NamespaceCommandBuilder does not know how to handle '#{cmd_name}'.") unless strategy
 
         STRATEGIES[strategy].call(command) { |key| rename_key(key) }
 
