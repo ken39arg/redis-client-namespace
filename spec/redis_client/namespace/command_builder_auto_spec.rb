@@ -94,7 +94,6 @@ RSpec.describe RedisClient::Namespace do
         if has_key
           it "should transform keys" do
             inputs, outputs = make_test_case(cmd_name, arguments)
-            puts "Inputs: #{inputs.inspect}, Outputs: #{outputs.inspect}"
             expect(builder.generate(inputs)).to eq(outputs)
           end
 
@@ -121,7 +120,6 @@ RSpec.describe RedisClient::Namespace do
         if has_optional_arg
           it "should handle optional arguments nothing" do
             inputs, outputs = make_test_case(cmd_name, arguments, non_optional: true)
-            puts "Inputs: #{inputs.inspect}, Outputs: #{outputs.inspect}"
             expect(builder.generate(inputs)).to eq(outputs)
           end
 

@@ -5,8 +5,15 @@ class RedisClient
     module CommandBuilder
       # Namespace transformation strategies
       STRATEGIES = {
-        first: ->(cmd, &block) { cmd[1] = block.call(cmd[1]) if cmd[1] },
+        # Basic common strategies
+        none: ->(cmd, &block) {}, # No transformation
         all: ->(cmd, &block) { cmd.drop(1).each_with_index { |key, i| cmd[i + 1] = block.call(key) } },
+        first: ->(cmd, &block) { cmd[1] = block.call(cmd[1]) if cmd[1] },
+        second: ->(cmd, &block) { cmd[2] = block.call(cmd[2]) if cmd[2] },
+        first_two: lambda { |cmd, &block|
+          cmd[1] = block.call(cmd[1]) if cmd[1]
+          cmd[2] = block.call(cmd[2]) if cmd[2]
+        },
         exclude_first: ->(cmd, &block) { cmd.drop(2).each_with_index { |key, i| cmd[i + 2] = block.call(key) } },
         exclude_last: lambda { |cmd, &block|
           return if cmd.size < 3
@@ -18,10 +25,8 @@ class RedisClient
             cmd[i + 1] = block.call(item) if i.even?
           end
         },
-        first_two: lambda { |cmd, &block|
-          cmd[1] = block.call(cmd[1]) if cmd[1]
-          cmd[2] = block.call(cmd[2]) if cmd[2]
-        },
+
+        # Custom strategies used by multiple commands
         eval_style: lambda { |cmd, &block|
           return if cmd.size < 3
 
@@ -29,14 +34,8 @@ class RedisClient
           actual_keys = [numkeys, cmd.size - 3].min
           actual_keys.times { |i| cmd[3 + i] = block.call(cmd[3 + i]) if cmd[3 + i] }
         },
-        original_scan_style: lambda { |cmd, &block|
-          cmd[1] = block.call(cmd[1]) if cmd[1]
-          # Handle MATCH option
-          if (match_idx = cmd.index { |arg| arg.to_s.casecmp("MATCH").zero? }) && cmd[match_idx + 1]
-            cmd[match_idx + 1] = block.call(cmd[match_idx + 1])
-          end
-        },
-        second: ->(cmd, &block) { cmd[2] = block.call(cmd[2]) if cmd[2] },
+
+        # Single-command specific strategies
         sort: lambda { |cmd, &block|
           cmd[1] = block.call(cmd[1]) if cmd[1]
           # Handle BY, GET, STORE options
@@ -52,7 +51,7 @@ class RedisClient
             end
           end
         },
-        georadius: lambda { |cmd, &block|
+        georadius_style: lambda { |cmd, &block|
           cmd[1] = block.call(cmd[1]) if cmd[1]
           # Handle STORE, STOREDIST options
           cmd.each_with_index do |arg, i|
@@ -73,7 +72,7 @@ class RedisClient
             cmd[key_idx] = block.call(cmd[key_idx]) if cmd[key_idx]
           end
         },
-        migrate_style: lambda { |cmd, &block|
+        migrate: lambda { |cmd, &block|
           # MIGRATE host port key destination-db timeout [options]
           # MIGRATE host port "" destination-db timeout [COPY | REPLACE] KEYS key [key ...]
           if cmd[3] && cmd[3] != ""
@@ -155,11 +154,10 @@ class RedisClient
           # First argument is the key, don't transform MATCH pattern for HSCAN/SSCAN/ZSCAN
           cmd[1] = block.call(cmd[1]) if cmd[1]
         },
-        memory_style: lambda { |cmd, &block|
+        memory_usage: lambda { |cmd, &block|
           # MEMORY USAGE key [SAMPLES samples]
           cmd[2] = block.call(cmd[2]) if cmd.size >= 3 && cmd[1].to_s.casecmp("USAGE").zero? && cmd[2]
-        },
-        none: ->(cmd, &block) {} # No transformation
+        }
       }.freeze
 
       # Command to strategy mapping (inspired by redis-namespace)
@@ -337,12 +335,12 @@ class RedisClient
         "GEODIST" => :first,
         "GEOHASH" => :first,
         "GEOPOS" => :first,
-        "GEORADIUS" => :georadius,
-        "GEORADIUSBYMEMBER" => :georadius,
+        "GEORADIUS" => :georadius_style,
+        "GEORADIUSBYMEMBER" => :georadius_style,
         "GEOSEARCH" => :first,
         "GEOSEARCHSTORE" => :first_two,
-        "GEORADIUS_RO" => :georadius,
-        "GEORADIUSBYMEMBER_RO" => :georadius,
+        "GEORADIUS_RO" => :georadius_style,
+        "GEORADIUSBYMEMBER_RO" => :georadius_style,
 
         # Streams
         "XADD" => :first,
@@ -410,7 +408,7 @@ class RedisClient
         "FLUSHDB" => :none,
         "INFO" => :none,
         "LASTSAVE" => :none,
-        "MEMORY" => :memory_style,
+        "MEMORY" => :memory_usage,
         "MONITOR" => :none,
         "SAVE" => :none,
         "SHUTDOWN" => :none,
@@ -433,7 +431,7 @@ class RedisClient
         # Other
         "SORT" => :sort,
         "COPY" => :first_two,
-        "MIGRATE" => :migrate_style,
+        "MIGRATE" => :migrate,
         "SORT_RO" => :sort,
         "RESTORE-ASKING" => :first,
         "OBJECT" => :second,
