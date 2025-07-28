@@ -105,7 +105,7 @@ end
 
 ## Supported Redis Commands
 
-RedisClient::Namespace supports all Redis commands with intelligent key transformation:
+RedisClient::Namespace supports the vast majority of Redis commands with intelligent key transformation:
 
 - **String commands**: `GET`, `SET`, `MGET`, `MSET`, etc.
 - **List commands**: `LPUSH`, `RPOP`, `LRANGE`, etc.
