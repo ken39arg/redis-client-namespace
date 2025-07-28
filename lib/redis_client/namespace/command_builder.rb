@@ -394,7 +394,10 @@ class RedisClient
         strategy = COMMANDS[cmd_name]
 
         # Raise error for unknown commands to maintain compatibility with redis-namespace
-        raise("RedisClient::NamespaceCommandBuilder does not know how to handle '#{cmd_name}'.") unless strategy
+        unless strategy
+          raise(::RedisClient::Namespace::Error,
+                "RedisClient::Namespace does not know how to handle '#{cmd_name}'.")
+        end
 
         STRATEGIES[strategy].call(command) { |key| rename_key(key) }
 

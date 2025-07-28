@@ -171,7 +171,7 @@ RSpec.describe RedisClient::Namespace do
       it "raises error for unknown commands" do
         expect do
           builder.generate(["UNKNOWN", "key", "value"])
-        end.to raise_error(RuntimeError, "RedisClient::NamespaceCommandBuilder does not know how to handle 'UNKNOWN'.")
+        end.to raise_error(RedisClient::Namespace::Error, "RedisClient::Namespace does not know how to handle 'UNKNOWN'.")
       end
 
       it "processes command passed as symbol" do
