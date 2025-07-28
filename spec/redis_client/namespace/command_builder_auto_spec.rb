@@ -114,7 +114,7 @@ RSpec.describe RedisClient::Namespace do
             end
           end
         else
-          it "should not transform. no key argmrnts" do
+          it "should not transform. no key arguments" do
             inputs, outputs = make_test_case(cmd_name, arguments)
             expect(builder.generate(inputs)).to eq(outputs)
           end

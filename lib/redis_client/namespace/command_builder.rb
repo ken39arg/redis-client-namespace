@@ -404,6 +404,8 @@ class RedisClient
         command
       end
 
+      private
+
       def rename_key(key)
         return key if @namespace.nil? || @namespace.empty?
 
