@@ -10,8 +10,12 @@ class RedisClient
 
     class Error < StandardError; end
 
-    def initialize(namespace = "")
+    attr_reader :namespace, :separator, :parent_command_builder
+
+    def initialize(namespace = "", separator: ":", parent_command_builder: RedisClient::CommandBuilder)
       @namespace = namespace
+      @separator = separator
+      @parent_command_builder = parent_command_builder
     end
   end
 end

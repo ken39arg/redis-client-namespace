@@ -383,7 +383,7 @@ class RedisClient
       }.freeze
 
       def generate(args, kwargs = nil)
-        command = RedisClient::CommandBuilder.generate(args, kwargs)
+        command = @parent_command_builder.generate(args, kwargs)
         return command if @namespace.nil? || @namespace.empty? || command.size < 2
 
         cmd_name = command[0].to_s.upcase
@@ -402,7 +402,7 @@ class RedisClient
       def rename_key(key)
         return key if @namespace.nil? || @namespace.empty?
 
-        "#{@namespace}:#{key}"
+        "#{@namespace}#{@separator}#{key}"
       end
     end
   end
