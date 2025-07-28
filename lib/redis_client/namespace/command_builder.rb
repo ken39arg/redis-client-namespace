@@ -162,7 +162,7 @@ class RedisClient
 
       # Command to strategy mapping (inspired by redis-namespace)
       COMMANDS = {
-        # Keys
+        # Generic
         "DEL" => :all,
         "EXISTS" => :all,
         "EXPIRE" => :first,
@@ -174,26 +174,40 @@ class RedisClient
         "PEXPIREAT" => :first,
         "PTTL" => :first,
         "RANDOMKEY" => :none,
-        "RENAME" => :all,
-        "RENAMENX" => :all,
+        "RENAME" => :first_two,
+        "RENAMENX" => :first_two,
         "RESTORE" => :first,
         "TTL" => :first,
         "TYPE" => :first,
         "UNLINK" => :all,
         "SCAN" => :scan_cursor_style,
         "DUMP" => :first,
+        "COPY" => :first_two,
+        "MIGRATE" => :migrate,
+        "SORT" => :sort,
+        "SORT_RO" => :sort,
+        "TOUCH" => :all,
+        "WAIT" => :none,
+        "WAITAOF" => :none,
+        "OBJECT" => :second,
+        "RESTORE-ASKING" => :first,
+        "EXPIRETIME" => :first,
+        "PEXPIRETIME" => :first,
 
-        # Strings
-        "APPEND" => :first,
+        # Bitmap
         "BITCOUNT" => :first,
         "BITOP" => :exclude_first,
         "BITPOS" => :first,
         "BITFIELD" => :first,
         "BITFIELD_RO" => :first,
+        "GETBIT" => :first,
+        "SETBIT" => :first,
+
+        # String
+        "APPEND" => :first,
         "DECR" => :first,
         "DECRBY" => :first,
         "GET" => :first,
-        "GETBIT" => :first,
         "GETRANGE" => :first,
         "GETSET" => :first,
         "INCR" => :first,
@@ -204,7 +218,6 @@ class RedisClient
         "MSETNX" => :alternate,
         "PSETEX" => :first,
         "SET" => :first,
-        "SETBIT" => :first,
         "SETEX" => :first,
         "SETNX" => :first,
         "SETRANGE" => :first,
@@ -212,10 +225,9 @@ class RedisClient
         "GETDEL" => :first,
         "GETEX" => :first,
         "LCS" => :first_two,
-        "TOUCH" => :all,
         "SUBSTR" => :first,
 
-        # Lists
+        # List
         "BLPOP" => :exclude_last,
         "BRPOP" => :exclude_last,
         "BRPOPLPUSH" => :first_two,
@@ -239,7 +251,7 @@ class RedisClient
         "BLMPOP" => :blmpop_style,
         "LPOS" => :first,
 
-        # Sets
+        # Set
         "SADD" => :first,
         "SCARD" => :first,
         "SDIFF" => :all,
@@ -258,7 +270,7 @@ class RedisClient
         "SSCAN" => :scan_style,
         "SINTERCARD" => :lmpop_style,
 
-        # Sorted Sets
+        # Sorted-set
         "BZPOPMIN" => :exclude_last,
         "BZPOPMAX" => :exclude_last,
         "ZADD" => :first,
@@ -295,7 +307,7 @@ class RedisClient
         "ZINTERCARD" => :lmpop_style,
         "ZRANGESTORE" => :first_two,
 
-        # Hashes
+        # Hash
         "HDEL" => :first,
         "HEXISTS" => :first,
         "HGET" => :first,
@@ -324,7 +336,7 @@ class RedisClient
         "HGETF" => :first,
         "HSETF" => :first,
 
-        # HyperLogLog
+        # Hyperloglog
         "PFADD" => :first,
         "PFCOUNT" => :all,
         "PFMERGE" => :all,
@@ -342,7 +354,7 @@ class RedisClient
         "GEORADIUS_RO" => :georadius_style,
         "GEORADIUSBYMEMBER_RO" => :georadius_style,
 
-        # Streams
+        # Stream
         "XADD" => :first,
         "XRANGE" => :first,
         "XREVRANGE" => :first,
@@ -359,7 +371,7 @@ class RedisClient
         "XAUTOCLAIM" => :first,
         "XSETID" => :first,
 
-        # Pub/Sub
+        # Pubsub
         "PSUBSCRIBE" => :all,
         "PUBLISH" => :first,
         "PUNSUBSCRIBE" => :all,
@@ -420,23 +432,12 @@ class RedisClient
         "LOLWUT" => :none,
         "ACL" => :none,
         "MODULE" => :none,
-        "WAIT" => :none,
         "CLUSTER" => :none,
         "HELLO" => :none,
         "FAILOVER" => :none,
         "REPLICAOF" => :none,
-        "PSYNC" => :none,
-        "WAITAOF" => :none,
+        "PSYNC" => :none
 
-        # Other
-        "SORT" => :sort,
-        "COPY" => :first_two,
-        "MIGRATE" => :migrate,
-        "SORT_RO" => :sort,
-        "RESTORE-ASKING" => :first,
-        "OBJECT" => :second,
-        "EXPIRETIME" => :first,
-        "PEXPIRETIME" => :first
       }.freeze
 
       def generate(args, kwargs = nil)
