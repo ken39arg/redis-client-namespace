@@ -78,6 +78,34 @@ client = RedisClient.config(command_builder: child).new_client
 client.call("SET", "queue", "important") # Actually sets "jobs:myapp:queue"
 ```
 
+### with `Redis` ([`redis-rb`](https://github.com/redis/redis-rb)) 
+
+This gem also works with the [redis](https://github.com/redis/redis-rb) gem through its `command_builder` option:
+
+```ruby
+require 'redis'
+require 'redis-client-namespace'
+
+# Create a namespaced command builder
+namespace = RedisClient::Namespace.new("myapp")
+
+# Use with redis-rb
+redis = Redis.new(host: 'localhost', port: 6379, command_builder: namespace)
+
+# All commands will be automatically namespaced
+redis.set("user:123", "john")            # Actually sets "myapp:user:123"
+redis.get("user:123")                    # Actually gets "myapp:user:123"
+redis.del("user:123", "user:456")        # Actually deletes "myapp:user:123", "myapp:user:456"
+
+# Works with all Redis commands
+redis.lpush("queue", ["job1", "job2"])   # Actually pushes to "myapp:queue"
+redis.hset("config", "timeout", "30")    # Actually sets in "myapp:config"
+redis.sadd("tags", "ruby", "rails")      # Actually adds to "myapp:tags"
+
+# Pattern matching
+redis.keys("user:*")                     # Actually searches for "myapp:user:*"
+```
+
 ### Sidekiq Integration
 
 This gem is particularly useful for Sidekiq applications that need namespace isolation:

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-RSpec.describe RedisClient::Namespace do
+RSpec.describe "RedisClient::Namespace use by redis-client" do
   let(:namespace) { "test_ns" }
-  let(:builder) { described_class.new(namespace) }
+  let(:builder) { RedisClient::Namespace.new(namespace) }
   let(:redis_host) { ENV.fetch("REDIS_HOST", "127.0.0.1") }
   let(:redis_port) { ENV.fetch("REDIS_PORT", "6379") }
   let(:redis_db) { ENV.fetch("REDIS_DB", "0") }
@@ -158,7 +158,7 @@ RSpec.describe RedisClient::Namespace do
   end
 
   describe "custom separator" do
-    let(:custom_builder) { described_class.new("app", separator: "-") }
+    let(:custom_builder) { RedisClient::Namespace.new("app", separator: "-") }
     let(:custom_client) { RedisClient.config(host: redis_host, port: redis_port, db: redis_db, command_builder: custom_builder).new_client }
 
     it "uses custom separator" do
@@ -171,8 +171,8 @@ RSpec.describe RedisClient::Namespace do
   end
 
   describe "nested namespaces" do
-    let(:parent_builder) { described_class.new("parent") }
-    let(:child_builder) { described_class.new("child", parent_command_builder: parent_builder) }
+    let(:parent_builder) { RedisClient::Namespace.new("parent") }
+    let(:child_builder) { RedisClient::Namespace.new("child", parent_command_builder: parent_builder) }
     let(:nested_client) { RedisClient.config(host: redis_host, port: redis_port, db: redis_db, command_builder: child_builder).new_client }
 
     it "applies nested namespaces" do
