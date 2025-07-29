@@ -13,10 +13,10 @@ REDIS_PORT = ENV.fetch("REDIS_PORT", "6379")
 REDIS_DB = ENV.fetch("REDIS_DB", "0")
 
 puts "Redis Namespace Benchmark: redis-namespace vs redis-client-namespace"
-puts "="*70
+puts "=" * 70
 puts "Testing with redis-rb (Redis.new)"
 puts "Redis: #{REDIS_HOST}:#{REDIS_PORT}/#{REDIS_DB}"
-puts "="*70
+puts "=" * 70
 
 # Create Redis clients
 plain_redis = Redis.new(host: REDIS_HOST, port: REDIS_PORT, db: REDIS_DB)
@@ -90,11 +90,11 @@ puts
 
 Benchmark.ips do |x|
   x.report("redis-namespace LPUSH") do
-    redis_namespace.lpush("list", ["item1", "item2"])
+    redis_namespace.lpush("list", %w[item1 item2])
   end
 
   x.report("redis-client-namespace LPUSH") do
-    redis_client_namespace.lpush("list", ["item1", "item2"])
+    redis_client_namespace.lpush("list", %w[item1 item2])
   end
 
   x.compare!
@@ -144,11 +144,11 @@ puts
 
 Benchmark.ips do |x|
   x.report("redis-namespace SADD") do
-    redis_namespace.sadd("set", ["member1", "member2"])
+    redis_namespace.sadd("set", %w[member1 member2])
   end
 
   x.report("redis-client-namespace SADD") do
-    redis_client_namespace.sadd("set", ["member1", "member2"])
+    redis_client_namespace.sadd("set", %w[member1 member2])
   end
 
   x.compare!
@@ -229,5 +229,5 @@ end
 # Clean up
 plain_redis.flushdb
 
-puts "\n" + "="*70
+puts "\n#{"=" * 70}"
 puts "Benchmark completed!"
