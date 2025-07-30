@@ -196,6 +196,23 @@ RSpec.describe RedisClient::Namespace do
           inputs: %w[SORT_RO list BY weight_* GET object_*],
           outputs: %w[SORT_RO test:list BY test:weight_* GET test:object_*]
         }
+      ],
+
+      # Commands with patterns not covered by auto_spec
+      # These test multiple key-value pairs in repeating blocks
+      "MSET" => [
+        {
+          pattern: "multiple key-value pairs",
+          inputs: %w[MSET key1 Hello key2 World],
+          outputs: %w[MSET test:key1 Hello test:key2 World]
+        }
+      ],
+      "MSETNX" => [
+        {
+          pattern: "multiple key-value pairs",
+          inputs: %w[MSETNX key1 Hello key2 there],
+          outputs: %w[MSETNX test:key1 Hello test:key2 there]
+        }
       ]
     }
 
