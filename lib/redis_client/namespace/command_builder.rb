@@ -456,7 +456,8 @@ class RedisClient
                 "RedisClient::Namespace does not know how to handle '#{cmd_name}'.")
         end
 
-        STRATEGIES[strategy].call(command) { |key| "#{namespace}#{separator}#{key}" }
+        prefix = "#{namespace}#{separator}"
+        STRATEGIES[strategy].call(command) { |key| key.start_with?(prefix) ? key : "#{prefix}#{key}" }
 
         command
       end
