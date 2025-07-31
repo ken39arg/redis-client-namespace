@@ -25,8 +25,13 @@ plain_redis = Redis.new(host: REDIS_HOST, port: REDIS_PORT, db: REDIS_DB)
 redis_namespace = Redis::Namespace.new("bench_old", redis: plain_redis)
 
 # redis-client-namespace (new approach)
-namespace_builder = RedisClient::Namespace.new("bench_new")
-redis_client_namespace = Redis.new(host: REDIS_HOST, port: REDIS_PORT, db: REDIS_DB, command_builder: namespace_builder)
+redis_client_namespace = Redis.new(
+  host: REDIS_HOST,
+  port: REDIS_PORT,
+  db: REDIS_DB,
+  middlewares: [RedisClient::Namespace::Middleware],
+  custom: { namespace: 'bench_new' }
+)
 
 # Clean up before benchmark
 plain_redis.flushdb
