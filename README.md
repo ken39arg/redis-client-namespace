@@ -78,6 +78,33 @@ client = RedisClient.config(command_builder: child).new_client
 client.call("SET", "queue", "important") # Actually sets "jobs:myapp:queue"
 ```
 
+### Using Middleware Approach
+
+You can also use RedisClient::Namespace as a [RedisClient middleware](https://github.com/redis-rb/redis-client#instrumentation-and-middlewares). This approach allows you to add namespacing without using a custom command builder:
+
+```ruby
+require 'redis-client-namespace'
+
+# Configure RedisClient with the namespace middleware
+client = RedisClient.config(
+  middlewares: [RedisClient::Namespace::Middleware],
+  custom: { namespace: "myapp", separator: ":" }
+).new_client
+
+# All commands will be automatically namespaced
+client.call("SET", "user:123", "john")   # Actually sets "myapp:user:123"
+client.call("GET", "user:123")           # Actually gets "myapp:user:123"
+
+# Commands that return keys will have the namespace automatically removed
+client.call("KEYS", "*")                  # Returns ["user:123"] instead of ["myapp:user:123"]
+client.call("SCAN", 0, "MATCH", "user:*") # Returns keys without namespace prefix
+```
+
+The middleware approach is useful when:
+- You want to apply namespacing dynamically based on configuration
+- You're already using other RedisClient middlewares
+- You prefer a more modular approach to command transformation
+
 ### with `Redis` ([`redis-rb`](https://github.com/redis/redis-rb)) 
 
 This gem also works with the [redis](https://github.com/redis/redis-rb) gem through its `command_builder` option:
@@ -147,6 +174,29 @@ RedisClient::Namespace supports the vast majority of Redis commands with intelli
 - **And many more...**
 
 The gem automatically detects which arguments are keys and applies the namespace prefix accordingly.
+
+### Limitations
+
+#### Pub/Sub Events
+
+When using the Middleware approach, Pub/Sub subscribe events (via `pubsub.next_event`) are not automatically processed to remove namespace prefixes from channel names. This is because the middleware doesn't have access to intercept the `next_event` method.
+
+If you're using Pub/Sub with the middleware approach, you'll need to manually handle namespace removal:
+
+```ruby
+# With middleware approach
+pubsub = client.pubsub
+pubsub.call("SUBSCRIBE", "channel1")  # Subscribes to "myapp:channel1"
+
+# You need to manually remove the namespace prefix from received events
+event = pubsub.next_event
+if event && event[0] == "message"
+  channel = event[1].delete_prefix("myapp:")  # Remove namespace manually
+  message = event[2]
+end
+```
+
+This limitation does not apply when using the `command_builder` approach.
 
 ## Advanced Features
 

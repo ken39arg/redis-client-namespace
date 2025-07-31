@@ -101,10 +101,10 @@ RSpec.describe RedisClient::Namespace do
         expect(result).to eq(["get", "test:key"])
       end
 
-      it "raises error for unknown commands" do
-        expect do
-          builder.generate(["UNKNOWN", "key", "value"])
-        end.to raise_error(RedisClient::Namespace::Error, "RedisClient::Namespace does not know how to handle 'UNKNOWN'.")
+      it "warns for unknown commands" do
+        expect { builder.generate(["UNKNOWN", "key", "value"]) }.to output(/RedisClient::Namespace does not know how to handle 'UNKNOWN'/).to_stderr
+        result = builder.generate(["UNKNOWN", "key", "value"])
+        expect(result).to eq(["UNKNOWN", "key", "value"])
       end
 
       it "processes command passed as symbol" do

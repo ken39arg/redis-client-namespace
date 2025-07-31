@@ -440,11 +440,7 @@ class RedisClient
 
       }.freeze
 
-      def generate(args, kwargs = nil)
-        namespaced_command(@parent_command_builder.generate(args, kwargs), namespace: @namespace, separator: @separator)
-      end
-
-      def namespaced_command(command, namespace: nil, separator: ":")
+      def self.namespaced_command(command, namespace: nil, separator: ":")
         return command if namespace.nil? || namespace.empty? || command.size < 2
 
         cmd_name = command[0].to_s.upcase
@@ -460,6 +456,20 @@ class RedisClient
         STRATEGIES[strategy].call(command) { |key| key.start_with?(prefix) ? key : "#{prefix}#{key}" }
 
         command
+      end
+
+      def self.trimed_result(command, result, namespace: nil, separator: ":")
+        return command if namespace.nil? || namespace.empty? || command.size < 2
+
+        prefix = "#{namespace}#{separator}"
+        case command[0].to_s.upcase
+        when "SCAN"
+          result[1].map { |r| r.delete_prefix!(prefix) } if result.size > 1
+        when "KEYS"
+          result.map { |r| r.delete_prefix!(prefix) }
+        when "BLPOP", "BRPOP"
+          result[0].delete_prefix!(prefix) unless result.empty?
+        end
       end
     end
   end

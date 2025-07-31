@@ -3,6 +3,7 @@
 require "redis-client"
 require_relative "namespace/version"
 require_relative "namespace/command_builder"
+require_relative "namespace/middleware"
 
 class RedisClient
   # RedisClient::Namespace provides transparent key namespacing for redis-client.
@@ -21,8 +22,6 @@ class RedisClient
   #   client = RedisClient.new(command_builder: builder)
   #   client.call("SET", "key", "value")  # Actually sets "myapp-key"
   class Namespace
-    include RedisClient::Namespace::CommandBuilder
-
     class Error < StandardError; end
 
     attr_reader :namespace, :separator, :parent_command_builder
@@ -31,6 +30,11 @@ class RedisClient
       @namespace = namespace
       @separator = separator
       @parent_command_builder = parent_command_builder
+    end
+
+    def generate(args, kwargs = nil)
+      CommandBuilder.namespaced_command(@parent_command_builder.generate(args, kwargs), namespace: @namespace,
+                                                                                        separator: @separator)
     end
 
     # Creates a command builder that conditionally applies namespacing.

@@ -213,10 +213,11 @@ RSpec.describe "RedisClient::Namespace use by redis-rb" do
   end
 
   describe "error handling" do
-    it "raises error for unknown commands" do
+    it "warns for unknown commands and lets Redis handle the error" do
+      # Capture stderr warning
       expect do
-        client.call("UNKNOWNCOMMAND", "arg1")
-      end.to raise_error(RedisClient::Namespace::Error, /does not know how to handle 'UNKNOWNCOMMAND'/)
+        expect { client.call("UNKNOWNCOMMAND", "arg1") }.to raise_error(Redis::CommandError)
+      end.to output(/RedisClient::Namespace does not know how to handle 'UNKNOWNCOMMAND'/).to_stderr
     end
   end
 end
