@@ -441,8 +441,11 @@ class RedisClient
       }.freeze
 
       def generate(args, kwargs = nil)
-        command = @parent_command_builder.generate(args, kwargs)
-        return command if @namespace.nil? || @namespace.empty? || command.size < 2
+        namespaced_command(@parent_command_builder.generate(args, kwargs), namespace: @namespace, separator: @separator)
+      end
+
+      def namespaced_command(command, namespace: nil, separator: ":")
+        return command if namespace.nil? || namespace.empty? || command.size < 2
 
         cmd_name = command[0].to_s.upcase
         strategy = COMMANDS[cmd_name]
@@ -453,17 +456,9 @@ class RedisClient
                 "RedisClient::Namespace does not know how to handle '#{cmd_name}'.")
         end
 
-        STRATEGIES[strategy].call(command) { |key| rename_key(key) }
+        STRATEGIES[strategy].call(command) { |key| "#{namespace}#{separator}#{key}" }
 
         command
-      end
-
-      private
-
-      def rename_key(key)
-        return key if @namespace.nil? || @namespace.empty?
-
-        "#{@namespace}#{@separator}#{key}"
       end
     end
   end
