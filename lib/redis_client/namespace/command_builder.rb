@@ -452,8 +452,8 @@ class RedisClient
 
         # Raise error for unknown commands to maintain compatibility with redis-namespace
         unless strategy
-          raise(::RedisClient::Namespace::Error,
-                "RedisClient::Namespace does not know how to handle '#{cmd_name}'.")
+          warn("RedisClient::Namespace does not know how to handle '#{cmd_name}'.")
+          return command
         end
 
         prefix = "#{namespace}#{separator}"
