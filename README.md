@@ -40,47 +40,9 @@ gem install redis-client-namespace
 
 ## Usage
 
-### Basic Usage
+### Basic Usage with Middleware (Recommended)
 
-```ruby
-require 'redis-client-namespace'
-
-# Create a namespaced command builder
-namespace = RedisClient::Namespace.new("myapp")
-
-# Use with redis-client
-client = RedisClient.config(command_builder: namespace).new_client
-
-# All commands will be automatically namespaced
-client.call("SET", "user:123", "john")   # Actually sets "myapp:user:123"
-client.call("GET", "user:123")           # Actually gets "myapp:user:123"
-client.call("DEL", "user:123", "user:456") # Actually deletes "myapp:user:123", "myapp:user:456"
-```
-
-### Custom Separator
-
-```ruby
-# Use a custom separator
-namespace = RedisClient::Namespace.new("myapp", separator: "-")
-client = RedisClient.config(command_builder: namespace).new_client
-
-client.call("SET", "user:123", "john")   # Actually sets "myapp-user:123"
-```
-
-### Nested Namespaces
-
-```ruby
-# Create nested namespaces
-parent = RedisClient::Namespace.new("myapp")
-child = RedisClient::Namespace.new("jobs", parent_command_builder: parent)
-
-client = RedisClient.config(command_builder: child).new_client
-client.call("SET", "queue", "important") # Actually sets "jobs:myapp:queue"
-```
-
-### Using Middleware Approach
-
-You can also use RedisClient::Namespace as a [RedisClient middleware](https://github.com/redis-rb/redis-client#instrumentation-and-middlewares). This approach allows you to add namespacing without using a custom command builder:
+RedisClient::Namespace is implemented as a [RedisClient middleware](https://github.com/redis-rb/redis-client#instrumentation-and-middlewares) that transparently handles both command transformation and result processing:
 
 ```ruby
 require 'redis-client-namespace'
@@ -100,24 +62,33 @@ client.call("KEYS", "*")                  # Returns ["user:123"] instead of ["my
 client.call("SCAN", 0, "MATCH", "user:*") # Returns keys without namespace prefix
 ```
 
-The middleware approach is useful when:
-- You want to apply namespacing dynamically based on configuration
-- You're already using other RedisClient middlewares
-- You prefer a more modular approach to command transformation
+### Custom Separator
 
-### with `Redis` ([`redis-rb`](https://github.com/redis/redis-rb)) 
+```ruby
+# Use a custom separator
+client = RedisClient.config(
+  middlewares: [RedisClient::Namespace::Middleware],
+  custom: { namespace: "myapp", separator: "-" }
+).new_client
 
-This gem also works with the [redis](https://github.com/redis/redis-rb) gem through its `command_builder` option:
+client.call("SET", "user:123", "john")   # Actually sets "myapp-user:123"
+```
+
+### with Redis (`redis-rb`)
+
+This gem also works with the [redis](https://github.com/redis/redis-rb) gem through its middleware support:
 
 ```ruby
 require 'redis'
 require 'redis-client-namespace'
 
-# Create a namespaced command builder
-namespace = RedisClient::Namespace.new("myapp")
-
-# Use with redis-rb
-redis = Redis.new(host: 'localhost', port: 6379, command_builder: namespace)
+# Use with redis-rb via middleware
+redis = Redis.new(
+  host: 'localhost', 
+  port: 6379,
+  middlewares: [RedisClient::Namespace::Middleware],
+  custom: { namespace: "myapp", separator: ":" }
+)
 
 # All commands will be automatically namespaced
 redis.set("user:123", "john")            # Actually sets "myapp:user:123"
@@ -129,8 +100,8 @@ redis.lpush("queue", ["job1", "job2"])   # Actually pushes to "myapp:queue"
 redis.hset("config", "timeout", "30")    # Actually sets in "myapp:config"
 redis.sadd("tags", "ruby", "rails")      # Actually adds to "myapp:tags"
 
-# Pattern matching
-redis.keys("user:*")                     # Actually searches for "myapp:user:*"
+# Pattern matching with automatic namespace removal
+redis.keys("user:*")                     # Returns ["user:123"] instead of ["myapp:user:123"]
 ```
 
 ### Sidekiq Integration
@@ -141,19 +112,19 @@ This gem is particularly useful for Sidekiq applications that need namespace iso
 # In your Sidekiq configuration
 require 'redis-client-namespace'
 
-namespace = RedisClient::Namespace.new("sidekiq_production")
-
 Sidekiq.configure_server do |config|
   config.redis = {
     url: 'redis://redis:6379/1',
-    command_builder: namespace,
+    middlewares: [RedisClient::Namespace::Middleware],
+    custom: { namespace: "sidekiq_production", separator: ":" }
   }
 end
 
 Sidekiq.configure_client do |config|
   config.redis = {
     url: 'redis://redis:6379/1',
-    command_builder: namespace,
+    middlewares: [RedisClient::Namespace::Middleware],
+    custom: { namespace: "sidekiq_production", separator: ":" }
   }
 end
 ```
@@ -196,7 +167,6 @@ if event && event[0] == "message"
 end
 ```
 
-This limitation does not apply when using the `command_builder` approach.
 
 ## Advanced Features
 
@@ -205,11 +175,14 @@ This limitation does not apply when using the `command_builder` approach.
 For commands like `SCAN` and `KEYS`, the namespace is automatically applied to patterns:
 
 ```ruby
-namespace = RedisClient::Namespace.new("myapp")
-client = RedisClient.config(command_builder: namespace).new_client
+client = RedisClient.config(
+  middlewares: [RedisClient::Namespace::Middleware],
+  custom: { namespace: "myapp", separator: ":" }
+).new_client
 
 # This will scan for "myapp:user:*" pattern
 client.call("SCAN", 0, "MATCH", "user:*")
+# Returns keys without the namespace prefix for easier handling
 ```
 
 ### Complex Commands
@@ -228,9 +201,10 @@ client.call("EVAL", "return redis.call('get', KEYS[1])", 1, "mykey")
 
 ## Configuration Options
 
+When using the middleware approach, configure via the `custom` option:
+
 - `namespace`: The namespace prefix to use (required)
 - `separator`: The separator between namespace and key (default: `":"`)
-- `parent_command_builder`: Parent command builder for nested namespaces (default: `RedisClient::CommandBuilder`)
 
 ## Thread Safety
 
