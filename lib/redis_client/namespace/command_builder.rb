@@ -468,7 +468,7 @@ class RedisClient
         when "KEYS"
           result.map { |r| r.delete_prefix!(prefix) }
         when "BLPOP", "BRPOP"
-          result[0].delete_prefix!(prefix) unless result.empty?
+          result[0].delete_prefix!(prefix) unless result.nil? || result.empty?
         end
       end
     end
