@@ -30,7 +30,7 @@ redis_client_namespace = Redis.new(
   port: REDIS_PORT,
   db: REDIS_DB,
   middlewares: [RedisClient::Namespace::Middleware],
-  custom: { namespace: 'bench_new' }
+  custom: { namespace: "bench_new" }
 )
 
 # Clean up before benchmark

@@ -10,6 +10,7 @@ group :development, :test do
   gem "redis"
   gem "rspec", "~> 3.0"
   gem "rubocop", "~> 1.21"
+  gem "sidekiq", "~> 7.0" # For integration testing
 end
 
 group :benchmark do
