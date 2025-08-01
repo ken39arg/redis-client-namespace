@@ -2,7 +2,7 @@
 
 A Redis namespace extension for [redis-client](https://github.com/redis-rb/redis-client) gem that automatically prefixes Redis keys with a namespace, enabling multi-tenancy and key isolation in Redis applications.
 
-This gem works by wrapping `RedisClient::CommandBuilder` and intercepting Redis commands to transparently add namespace prefixes to keys before they are sent to Redis.
+This gem works by implementing a RedisClient middleware that intercepts Redis commands to transparently add namespace prefixes to keys before they are sent to Redis and removes them from results (with some limitations for certain commands like Pub/Sub events).
 
 ## Motivation
 
@@ -11,10 +11,7 @@ This gem was created to provide namespace support for [Sidekiq](https://github.c
 ## Features
 
 - **Transparent key namespacing**: Automatically prefixes Redis keys with a configurable namespace
-- **Comprehensive command support**: Supports all Redis commands with intelligent key detection
-- **Customizable separator**: Configure the namespace separator (default: `:`)
-- **Nested namespaces**: Support for nested command builders with multiple namespace levels
-- **Zero configuration**: Works out of the box with sensible defaults
+- **Comprehensive command support**: Supports most Redis commands with intelligent key detection
 - **High performance**: Minimal overhead with efficient command transformation
 - **Thread-safe**: Safe for use in multi-threaded applications
 
@@ -40,7 +37,7 @@ gem install redis-client-namespace
 
 ## Usage
 
-### Basic Usage with Middleware (Recommended)
+### with RedisClient
 
 RedisClient::Namespace is implemented as a [RedisClient middleware](https://github.com/redis-rb/redis-client#instrumentation-and-middlewares) that transparently handles both command transformation and result processing:
 
@@ -50,7 +47,7 @@ require 'redis-client-namespace'
 # Configure RedisClient with the namespace middleware
 client = RedisClient.config(
   middlewares: [RedisClient::Namespace::Middleware],
-  custom: { namespace: "myapp", separator: ":" }
+  custom: { namespace: "myapp" }
 ).new_client
 
 # All commands will be automatically namespaced
@@ -95,7 +92,7 @@ redis.set("user:123", "john")            # Actually sets "myapp:user:123"
 redis.get("user:123")                    # Actually gets "myapp:user:123"
 redis.del("user:123", "user:456")        # Actually deletes "myapp:user:123", "myapp:user:456"
 
-# Works with all Redis commands
+# Works with most Redis commands
 redis.lpush("queue", ["job1", "job2"])   # Actually pushes to "myapp:queue"
 redis.hset("config", "timeout", "30")    # Actually sets in "myapp:config"
 redis.sadd("tags", "ruby", "rails")      # Actually adds to "myapp:tags"
@@ -147,6 +144,10 @@ RedisClient::Namespace supports the vast majority of Redis commands with intelli
 The gem automatically detects which arguments are keys and applies the namespace prefix accordingly.
 
 ### Limitations
+
+#### Unknown Commands
+
+Commands not explicitly supported by the gem will generate a warning and be passed through without namespace transformation. This ensures compatibility but means namespace isolation may not work for newer or less common Redis commands.
 
 #### Pub/Sub Events
 
@@ -208,14 +209,14 @@ When using the middleware approach, configure via the `custom` option:
 
 ## Thread Safety
 
-RedisClient::Namespace is **thread-safe** and can be used in multi-threaded applications without additional synchronization. The implementation:
+RedisClient::Namespace is **thread-safe** and can be used in multi-threaded applications without additional synchronization. The middleware implementation:
 
-- Uses immutable instance variables (`@namespace`, `@separator`, `@parent_command_builder`) that are set once during initialization
-- Never modifies shared state during command processing
-- Creates new command arrays for each operation without mutating the original
+- Reads configuration from `redis_config.custom` without maintaining any state
+- Uses class methods in `CommandBuilder` that don't modify shared state
+- Each call receives its own command array from RedisClient, avoiding shared mutable state
 - Uses frozen constants for strategy and command mappings
 
-Each `generate` call is completely independent, making it safe to use the same namespace instance across multiple threads.
+Each middleware call is completely independent, making it safe to use the same middleware across multiple threads and connections.
 
 ## Performance
 
