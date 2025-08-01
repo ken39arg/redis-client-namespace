@@ -1,9 +1,12 @@
 ## [Unreleased]
 
+## [0.2.0] - 2025-08-01
+
 ### Added
 - Added `RedisClient::Namespace::Middleware` for full namespace support including result processing
 - Added automatic removal of namespace prefixes from command results (KEYS, SCAN, BLPOP, BRPOP)
 - Middleware approach allows proper handling of both command transformation and result trimming
+- Added comprehensive Sidekiq integration tests with Sidekiq::Launcher
 
 ### Changed
 - **BREAKING**: Middleware approach is now the recommended way to use RedisClient::Namespace
