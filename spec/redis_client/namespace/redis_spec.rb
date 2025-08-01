@@ -4,11 +4,18 @@ RSpec.describe "RedisClient::Namespace use by redis-rb" do
   require "redis"
 
   let(:namespace) { "test_ns" }
-  let(:builder) { RedisClient::Namespace.new(namespace) }
   let(:redis_host) { ENV.fetch("REDIS_HOST", "127.0.0.1") }
   let(:redis_port) { ENV.fetch("REDIS_PORT", "6379") }
   let(:redis_db) { ENV.fetch("REDIS_DB", "0") }
-  let(:client) { Redis.new(host: redis_host, port: redis_port, db: redis_db, command_builder: builder) }
+  let(:client) do
+    Redis.new(
+      host: redis_host,
+      port: redis_port,
+      db: redis_db,
+      middlewares: [RedisClient::Namespace::Middleware],
+      custom: { namespace: namespace }
+    )
+  end
   let(:raw_client) { Redis.new(host: redis_host, port: redis_port, db: redis_db) }
 
   before do
@@ -151,10 +158,10 @@ RSpec.describe "RedisClient::Namespace use by redis-rb" do
 
       # KEYS returns the actual Redis keys with namespace prefix
       user_keys = client.keys("user:*")
-      expect(user_keys).to contain_exactly("test_ns:user:1", "test_ns:user:2")
+      expect(user_keys).to contain_exactly("user:1", "user:2")
 
       all_keys = client.keys("*")
-      expect(all_keys).to contain_exactly("test_ns:user:1", "test_ns:user:2", "test_ns:admin:1")
+      expect(all_keys).to contain_exactly("user:1", "user:2", "admin:1")
     end
   end
 
@@ -213,10 +220,11 @@ RSpec.describe "RedisClient::Namespace use by redis-rb" do
   end
 
   describe "error handling" do
-    it "raises error for unknown commands" do
+    it "warns for unknown commands and lets Redis handle the error" do
+      # Capture stderr warning
       expect do
-        client.call("UNKNOWNCOMMAND", "arg1")
-      end.to raise_error(RedisClient::Namespace::Error, /does not know how to handle 'UNKNOWNCOMMAND'/)
+        expect { client.call("UNKNOWNCOMMAND", "arg1") }.to raise_error(Redis::CommandError)
+      end.to output(/RedisClient::Namespace does not know how to handle 'UNKNOWNCOMMAND'/).to_stderr
     end
   end
 end

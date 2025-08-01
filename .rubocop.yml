@@ -47,13 +47,16 @@ Naming/FileName:
     - 'lib/redis-client-namespace.rb'
 
 # Test helper method for processing Redis commands.json - complexity is justified
+# Also exclude trimed_result method which handles multiple command types
 Metrics/AbcSize:
   Exclude:
     - 'spec/redis_client/namespace/command_builder_auto_spec.rb'
+    - 'lib/redis_client/namespace/command_builder.rb'
 
 Metrics/CyclomaticComplexity:
   Exclude:
     - 'spec/redis_client/namespace/command_builder_auto_spec.rb'
+    - 'lib/redis_client/namespace/command_builder.rb'
 
 Metrics/MethodLength:
   Exclude:
@@ -62,3 +65,4 @@ Metrics/MethodLength:
 Metrics/PerceivedComplexity:
   Exclude:
     - 'spec/redis_client/namespace/command_builder_auto_spec.rb'
+    - 'lib/redis_client/namespace/command_builder.rb'

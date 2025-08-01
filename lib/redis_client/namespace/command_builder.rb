@@ -440,30 +440,36 @@ class RedisClient
 
       }.freeze
 
-      def generate(args, kwargs = nil)
-        command = @parent_command_builder.generate(args, kwargs)
-        return command if @namespace.nil? || @namespace.empty? || command.size < 2
+      def self.namespaced_command(command, namespace: nil, separator: ":")
+        return command if namespace.nil? || namespace.empty? || command.size < 2
 
         cmd_name = command[0].to_s.upcase
         strategy = COMMANDS[cmd_name]
 
         # Raise error for unknown commands to maintain compatibility with redis-namespace
         unless strategy
-          raise(::RedisClient::Namespace::Error,
-                "RedisClient::Namespace does not know how to handle '#{cmd_name}'.")
+          warn("RedisClient::Namespace does not know how to handle '#{cmd_name}'.")
+          return command
         end
 
-        STRATEGIES[strategy].call(command) { |key| rename_key(key) }
+        prefix = "#{namespace}#{separator}"
+        STRATEGIES[strategy].call(command) { |key| key.start_with?(prefix) ? key : "#{prefix}#{key}" }
 
         command
       end
 
-      private
+      def self.trimed_result(command, result, namespace: nil, separator: ":")
+        return command if namespace.nil? || namespace.empty? || command.size < 2
 
-      def rename_key(key)
-        return key if @namespace.nil? || @namespace.empty?
-
-        "#{@namespace}#{@separator}#{key}"
+        prefix = "#{namespace}#{separator}"
+        case command[0].to_s.upcase
+        when "SCAN"
+          result[1].map { |r| r.delete_prefix!(prefix) } if result.size > 1
+        when "KEYS"
+          result.map { |r| r.delete_prefix!(prefix) }
+        when "BLPOP", "BRPOP"
+          result[0].delete_prefix!(prefix) unless result.nil? || result.empty?
+        end
       end
     end
   end
