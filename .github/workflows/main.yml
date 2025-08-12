@@ -10,8 +10,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: Ruby ${{ matrix.ruby }} / ${{ matrix.database.name }}
+    name: Ruby ${{ matrix.ruby }} / ${{ matrix.database.name }} / Sidekiq ${{ matrix.sidekiq-version }}
     strategy:
+      fail-fast: false
       matrix:
         ruby:
           - '3.1'
@@ -34,6 +35,9 @@ jobs:
           - name: Valkey 8
             image: valkey/valkey
             version: 8
+        exclude:
+          - ruby: '3.1'
+            sidekiq-version: '~> 8.0'
     env:
       SIDEKIQ_VERSION: "${{ matrix.sidekiq-version }}"
 
