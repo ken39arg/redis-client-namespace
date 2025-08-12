@@ -10,15 +10,18 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: Ruby ${{ matrix.ruby }} / ${{ matrix.database.name }}
+    name: Ruby ${{ matrix.ruby }} / ${{ matrix.database.name }} / Sidekiq ${{ matrix.sidekiq-version }}
     strategy:
+      fail-fast: false
       matrix:
         ruby:
           - '3.1'
           - '3.2'
           - '3.3'
           - '3.4'
-          - 'head'
+        sidekiq-version:
+          - '~> 7.0'
+          - '~> 8.0'
         database:
           - name: Redis 6.2
             image: redis
@@ -32,6 +35,11 @@ jobs:
           - name: Valkey 8
             image: valkey/valkey
             version: 8
+        exclude:
+          - ruby: '3.1'
+            sidekiq-version: '~> 8.0'
+    env:
+      SIDEKIQ_VERSION: "${{ matrix.sidekiq-version }}"
 
     steps:
       - uses: actions/checkout@v4
